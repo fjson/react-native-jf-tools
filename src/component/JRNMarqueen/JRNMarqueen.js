@@ -1,8 +1,12 @@
-import React,{ Component } from 'react';
+import React, {Fragment, PureComponent} from 'react';
 import {View, Animated, Text, Easing} from "react-native";
+import propTypes from 'prop-types';
 
-export class JRNMarquee extends Component{
+export class JRNMarquee extends PureComponent{
     transformX= new Animated.Value(0);
+    state = {
+        containerWidth:0
+    };
 
     constructor(props) {
         super(props);
@@ -11,53 +15,64 @@ export class JRNMarquee extends Component{
     render() {
         let { text } = this.props;
         return (
-            <View style={{ backgroundColor:'red', flexDirection:'row', overflow:'hidden' }}>
-                <Animated.View
-                    style={{transform:[{ translateX:this.transformX }], width:'100%' }}>
-                    <View ref={(container) => this.container = container} style={{ backgroundColor:'transparent' }}>
-                        <Text>{ text }</Text>
-                    </View>
-                </Animated.View>
-                <Animated.View  style={{ transform:[{ translateX:this.transformX}], width:'100%' }}>
-                    <View style={{ backgroundColor:'transparent' }}>
-                        <Text>{ text }</Text>
-                    </View>
-                </Animated.View>
+            <View style={{  flexDirection:'row', overflow:'hidden', height:'100%', alignItems:'center' }} onLayout={({ nativeEvent:{ layout:{ width } }}) => this.setState({ contentWidth:width })}>
+                {
+                    this.state.contentWidth === undefined ? null :(
+                        <Fragment>
+                            <Animated.Text
+                                ref={(container) => this.container = container}
+                                style={
+                                    [
+                                        {
+                                            position:'absolute', minWidth:this.state.contentWidth, left:this.transformX.interpolate({
+                                                inputRange:[0,1],
+                                                outputRange:[0,-this.state.containerWidth]
+                                            })
+                                        },
+                                        this.props.style
+                                    ]
+                                }
+                            >{ text }</Animated.Text>
+                            <Animated.Text
+                                style={
+                                    [
+                                        {
+                                            position:'absolute', minWidth:this.state.contentWidth, left:this.transformX.interpolate({
+                                                inputRange:[0,1],
+                                                outputRange:[this.state.containerWidth,0]
+                                            })
+                                        },
+                                        this.props.style
+                                    ]
+                                }
+                            >{ text }</Animated.Text>
+                        </Fragment>
+                    )
+                }
             </View>
         );
     }
 
-    startAnimate(container) {
-        this.animateToEnd(container);
+    startAnimate() {
+        this.animateToEnd();
     }
 
-
-    animateToEnd(container) {
+    animateToEnd() {
         Animated.timing(this.transformX,{
-            toValue:-container,
-            duration:4000,
+            toValue:1,
+            duration:this.props.time,
             easing:Easing.linear,
-            useNativeDriver:true
         }).start(() => {
-            this.animateToStart(container)
+            this.animateToStart()
         });
-        this.flag = true;
     }
 
-    animateToStart(container) {
+    animateToStart() {
         Animated.timing(this.transformX,{
             toValue:0,
-            duration:0,
-            useNativeDriver:true
+            duration:0
         }).start(() => {
-            this.animateToEnd(container)
-        })
-    }
-
-
-    componentDidMount() {
-        this.getWidth().then(([ container]) => {
-            this.startAnimate(container);
+            this.animateToEnd()
         })
     }
 
@@ -71,7 +86,34 @@ export class JRNMarquee extends Component{
         });
     }
 
-    getWidth() {
-        return Promise.all([this.getElementWidth(this.container)]);
+    componentDidUpdate(preProps, preState) {
+        if(this.props.text !== preProps.text){
+            this.getElementWidth(this.container.getNode()).then((container) => {
+                this.setState({
+                    containerWidth:container
+                })
+            });
+        }
+
+        if(this.state.contentWidth !== undefined && preState.contentWidth === undefined) {
+            this.getElementWidth(this.container.getNode()).then((container) => {
+                this.setState({
+                    containerWidth:container
+                },() => {
+                    this.startAnimate();
+                })
+            });
+        }
     }
 }
+
+JRNMarquee.defaultProps = {
+    time:4000,
+    text:''
+};
+
+JRNMarquee.propTypes = {
+    time:propTypes.number,
+    text:propTypes.string,
+    style:Text.propTypes.style
+};
